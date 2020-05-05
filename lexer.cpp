@@ -28,7 +28,7 @@ int Lexer::GetTok() {
 
     if (isalpha(last_char_)) {
         identifier_str_  = last_char_;
-        while (isalnum(last_char_ = input_file_.get())) {
+        while (isalnum(last_char_ = input_file_.get()))
             identifier_str_ += last_char_;
         
         if (identifier_str_ == "def")
@@ -66,3 +66,4 @@ int Lexer::GetTok() {
 
     return this_char;
 }
+

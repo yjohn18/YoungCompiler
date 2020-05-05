@@ -1,7 +1,11 @@
+#ifndef LEXER_H
+#define LEXER_H
+
 #include <string>
 #include <fstream>
 #include <cctype>
 #include <iostream>
+#include <cstdlib>
 
 // The lexer returns tokens [0-255] if it is an unknown character, otherwise one
 // of these for known things.
@@ -27,4 +31,10 @@ public:
     ~Lexer();
     bool IsFileOpen();
     int  GetTok();
+    
+    /* getters */
+    double num_val();
+    std::string identifier_str();
 };
+
+#endif
