@@ -7,6 +7,8 @@ using namespace std;
 //     // last_char_ = ' ';
 // }
 
+Lexer::Lexer() {}
+
 Lexer::Lexer(string file_path) {
     input_file_.open(file_path);
     last_char_ = ' ';
@@ -14,6 +16,12 @@ Lexer::Lexer(string file_path) {
 
 Lexer::~Lexer() {
     input_file_.close();
+}
+
+void Lexer::SetFilePath(string file_path) {
+    input_file_.close();
+    input_file_.open(file_path);
+    last_char_ = ' ';
 }
 
 bool Lexer::IsFileOpen() {
@@ -65,5 +73,13 @@ int Lexer::GetTok() {
     last_char_ = input_file_.get();
 
     return this_char;
+}
+
+double Lexer::num_val() {
+    return num_val_;
+}
+
+string Lexer::identifier_str() {
+    return identifier_str_;
 }
 

@@ -28,7 +28,9 @@ private:
 public:
     // 接收一个文件路径
     Lexer(std::string file_path);
+    Lexer();
     ~Lexer();
+    void SetFilePath(std::string file_path);
     bool IsFileOpen();
     int  GetTok();
     

@@ -1,20 +1,13 @@
 #include <iostream>
-#include "lexer.h"
+#include "parser.h"
+
 using namespace std;
 
 int main() {
-    Lexer lexer("test.txt");
-    
-    if (lexer.IsFileOpen())
-        cout << "file open successfully" << endl;
-    else {
-        cout << "file open failed" << endl;
-        return 1;
-    }
+    Parser p("./test.txt");
+    p.MainLoop();
 
-    int tok;
-    while ((tok = lexer.GetTok()) != kTokEof)
-        cout << tok << endl;
-    
+    the_module_->print(llvm::errs(), nullptr);
+
     return 0;
 }
