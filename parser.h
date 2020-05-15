@@ -38,11 +38,6 @@ protected:
     // GetTokPrecedence - Get the precedence of the pending binary operator token.
     int GetTokPrecedence();
 
-    // LogError* - These are little helper functions for error handling.
-//    std::unique_ptr<ExprAst> LogError(const char *str);
-//    std::unique_ptr<PrototypeAst> LogErrorP(const char *str);
-//    llvm::Value *LogErrorV(const char *str);
-
     // numberexpr ::= number
     std::unique_ptr<ExprAst> ParseNumberExpr();
 
@@ -81,7 +76,12 @@ protected:
 
     // external ::= 'extern' prototype
     std::unique_ptr<PrototypeAst> ParseExtern();
-
+    
+    // ifexpr ::= 'if' '(' expression ')' expression 'else' expression
+    std::unique_ptr<ExprAst> ParseIfExpr();
+    
+    // whileexpr ::= 'while' '(' expression ')' expression
+    std::unique_ptr<ExprAst> ParseWhileExpr();
     /* Top-Level parsing */
     void HandleDefinition();
     void HandleExtern();

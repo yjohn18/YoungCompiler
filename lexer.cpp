@@ -43,6 +43,15 @@ int Lexer::GetTok() {
             return kTokDef;
         if (identifier_str_ == "extern")
             return kTokExtern;
+        if (identifier_str_ == "if")
+            return kTokIf;
+        if (identifier_str_ == "then")
+            return kTokThen;
+        if (identifier_str_ == "else")
+            return kTokElse;
+        if (identifier_str_ == "while")
+            return kTokWhile;
+
         return kTokIdentifier;
     }
 

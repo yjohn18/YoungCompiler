@@ -16,7 +16,12 @@ enum Token {
     kTokExtern = -3,
     
     kTokIdentifier = -4,
-    kTokNumber = -5
+    kTokNumber = -5,
+
+    kTokIf = -6,
+    kTokThen = -7,
+    kTokElse = -8,
+    kTokWhile = -9
 };
 
 class Lexer {

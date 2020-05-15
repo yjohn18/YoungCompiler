@@ -1,2 +1,12 @@
-def foo(a b) a*a + 2*a*b + b*b;
-def bar(a) foo(a, 4.0) + bar(31337);
+extern sin(x);
+extern cos(x);
+
+def t(x)
+if (x-6)
+    x+5
+else
+    x-5;
+
+def tt (x)
+while (x - 6)
+    (x + 5) * 3;

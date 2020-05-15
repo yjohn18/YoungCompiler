@@ -4,6 +4,22 @@
 #include <utility>
 #include <iostream>
 #include <vector>
+#include <cstdint>
+#include <cassert>
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/GVN.h"
+
+extern llvm::LLVMContext kTheContext;
+extern llvm::IRBuilder<> kBuilder;
+extern std::unique_ptr<llvm::Module> kTheModule;
+extern std::map<std::string, llvm::Value *> kNamedValues;
+extern std::unique_ptr<llvm::legacy::FunctionPassManager> kTheFpm;
+extern std::unique_ptr<llvm::orc::KaleidoscopeJIT> kTheJit;
+extern std::map<std::string, std::unique_ptr<PrototypeAst>> kFunctionProtos;
+
 
 using namespace std;
 
@@ -82,7 +98,12 @@ unique_ptr<ExprAst> Parser::ParsePrimary() {
             return ParseNumberExpr();
         case '(':
             return ParseParenExpr();
+        case kTokIf:
+            return ParseIfExpr();
+        case kTokWhile:
+            return ParseWhileExpr();
         default:
+            cerr << "cut_tok_ " << cur_tok_ << endl;
             return LogError("unknown token when expecting an expression");
     }
 }
@@ -174,12 +195,72 @@ unique_ptr<PrototypeAst> Parser::ParseExtern() {
     return ParsePrototype();
 }
 
+unique_ptr<ExprAst> Parser::ParseIfExpr() {
+    GetNextToken(); // eat 'if'
+
+    if (cur_tok_ != '(')
+        return LogError("expected '('");
+    GetNextToken(); // eat '('
+
+    // condition
+    auto cond = ParseExpression();
+    if (!cond)
+        return nullptr;
+
+    if (cur_tok_ != ')')
+        return LogError("expected ')'");
+    GetNextToken(); // ')'
+
+    auto then_expr = ParseExpression();
+    if (!then_expr)
+        return nullptr;
+
+    if (cur_tok_ != kTokElse) {
+        // if - then expression
+        cerr << "cur_tok_ " << cur_tok_ << endl;
+        return LogError("expected else");
+    }
+
+    GetNextToken();
+
+    auto else_expr = ParseExpression();
+    if (!else_expr)
+        return nullptr;
+    return make_unique<IfExprAst>(move(cond), move(then_expr), move(else_expr));
+}
+
+unique_ptr<ExprAst> Parser::ParseWhileExpr() {
+    GetNextToken(); // eat 'while'
+
+    if (cur_tok_ != '(')
+        return LogError("expected '(' after while");
+    GetNextToken(); // eat '('
+
+    // condition
+    auto cond = ParseExpression();
+    if (!cond)
+        return nullptr;
+
+    if (cur_tok_ != ')')
+        return LogError("expected ')'");
+    GetNextToken(); // eat ')'
+
+    auto body = ParseExpression();
+    if (!body)
+        return nullptr;
+
+    cerr << "parse while expression done" << endl;
+    return make_unique<WhileExprAst>(move(cond), move(body));
+}
+
 void Parser::HandleDefinition() {
     if (auto fn_ast = ParseDefinition()) {
         if (auto *fn_ir = fn_ast->CodeGen()) {
             cerr << "Read function definition: ";
             fn_ir->print(llvm::errs());
             cerr << endl;
+            kTheJit->addModule(std::move(kTheModule));
+            InitializeModuleAndPassManager();
         }
     } else {
         GetNextToken();
@@ -192,6 +273,7 @@ void Parser::HandleExtern() {
             cerr << "Read extern: ";
             fn_ir->print(llvm::errs());
             cerr << endl;
+            kFunctionProtos[proto_ast->name()] = move(proto_ast);
         }
     } else {
         GetNextToken();
@@ -201,9 +283,17 @@ void Parser::HandleExtern() {
 void Parser::HandleTopLevelExpression() {
     if (auto fn_ast = ParseTopLevelExpr()) {
         if (auto *fn_ir = fn_ast->CodeGen()) {
-            cerr << "Read top-level expression: ";
-            fn_ir->print(llvm::errs());
-            cerr << endl;
+            
+            auto h = kTheJit->addModule(move(kTheModule));
+            InitializeModuleAndPassManager();
+
+            auto expr_symbol = kTheJit->findSymbol("__anon_expr");
+            assert(expr_symbol && "Function not found");
+
+            double (*fp)() = (double (*)())(intptr_t)llvm::cantFail(expr_symbol.getAddress());
+            cerr << "Evaluated to " << fp() << endl;
+
+            kTheJit->removeModule(h);
         }
     } else {
         GetNextToken();
@@ -232,6 +322,10 @@ void Parser::MainLoop() {
 }
 
 Parser::Parser(string file_path) {
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+    llvm::InitializeNativeTargetAsmParser();
+    
     bin_op_precedence_['<'] = 10;
     bin_op_precedence_['+'] = 20;
     bin_op_precedence_['-'] = 20;
@@ -242,6 +336,10 @@ Parser::Parser(string file_path) {
         cerr << "fail to open source file " << file_path << endl;
     
     GetNextToken();
+
+    kTheJit = make_unique<llvm::orc::KaleidoscopeJIT>();
+
+    InitializeModuleAndPassManager();
 }
 
 
