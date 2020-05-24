@@ -102,6 +102,11 @@ unique_ptr<ExprAst> Parser::ParsePrimary() {
             return ParseIfExpr();
         case kTokWhile:
             return ParseWhileExpr();
+        case kTokInt:
+            return ParseIntExpr();
+        case '}': // Is it correct?
+            cerr << "I find '}'" << endl;
+            return nullptr;
         default:
             cerr << "cut_tok_ " << cur_tok_ << endl;
             return LogError("unknown token when expecting an expression");
@@ -176,8 +181,19 @@ unique_ptr<FunctionAst> Parser::ParseDefinition() {
     if (!proto)
         return nullptr;
 
-    if (auto expr = ParseExpression())
+    //if (cur_tok_ != '{')
+        //LogErrorP("expected '{'");
+    //GetNextToken(); // eat '{'
+
+    if (auto expr = ParseExpression()) {
+        //if (cur_tok_ != '}')
+            //std::cerr << "cur_tok_ " << cur_tok_ << std::endl;
+            //LogErrorP("expected '}'");
+        //GetNextToken(); // eat '}'
+
         return make_unique<FunctionAst>(move(proto), move(expr));
+    }
+    
     return nullptr;
 }
 
@@ -253,14 +269,60 @@ unique_ptr<ExprAst> Parser::ParseWhileExpr() {
     return make_unique<WhileExprAst>(move(cond), move(body));
 }
 
+unique_ptr<ExprAst> Parser::ParseIntExpr() {
+    GetNextToken();
+
+    vector<pair<string, unique_ptr<ExprAst>>> var_names;
+
+    // At least one variable is required.
+    if (cur_tok_ != kTokIdentifier)
+        return LogError("expected identifier after 'int'");
+
+    while (true) {
+        string name = lexer_.identifier_str();
+        GetNextToken(); // eat identifier
+
+        // Read the optional initializer.
+        unique_ptr<ExprAst> init; // initializer
+        if (cur_tok_ == '=') {
+            GetNextToken();
+
+            init = ParseExpression();
+            if (!init)
+                return nullptr;
+        }
+
+        var_names.push_back(make_pair(name, move(init)));
+
+        // End of var list, exit loop.
+        if (cur_tok_ != ',')
+            break;
+
+        GetNextToken(); // eat ','
+        if (cur_tok_ != kTokIdentifier)
+            return LogError("expected identifier list after var");
+    }
+
+    if (cur_tok_ != ';')
+        return LogError("expected ';'");
+    GetNextToken(); // eat ';'
+
+    // body
+    unique_ptr<ExprAst> body = ParseExpression();
+    if (!body)
+        return nullptr;
+    
+    return make_unique<IntExprAst>(move(var_names), move(body));
+}
+
 void Parser::HandleDefinition() {
     if (auto fn_ast = ParseDefinition()) {
         if (auto *fn_ir = fn_ast->CodeGen()) {
             cerr << "Read function definition: ";
             fn_ir->print(llvm::errs());
             cerr << endl;
-            kTheJit->addModule(std::move(kTheModule));
-            InitializeModuleAndPassManager();
+            //kTheJit->addModule(std::move(kTheModule));
+            //InitializeModuleAndPassManager();
         }
     } else {
         GetNextToken();
@@ -282,19 +344,20 @@ void Parser::HandleExtern() {
 
 void Parser::HandleTopLevelExpression() {
     if (auto fn_ast = ParseTopLevelExpr()) {
-        if (auto *fn_ir = fn_ast->CodeGen()) {
+        //if (auto *fn_ir = fn_ast->CodeGen()) {
             
-            auto h = kTheJit->addModule(move(kTheModule));
-            InitializeModuleAndPassManager();
+            //auto h = kTheJit->addModule(move(kTheModule));
+            //InitializeModuleAndPassManager();
 
-            auto expr_symbol = kTheJit->findSymbol("__anon_expr");
-            assert(expr_symbol && "Function not found");
+            //auto expr_symbol = kTheJit->findSymbol("__anon_expr");
+            //assert(expr_symbol && "Function not found");
 
-            double (*fp)() = (double (*)())(intptr_t)llvm::cantFail(expr_symbol.getAddress());
-            cerr << "Evaluated to " << fp() << endl;
+            //double (*fp)() = (double (*)())(intptr_t)llvm::cantFail(expr_symbol.getAddress());
+            //cerr << "Evaluated to " << fp() << endl;
 
-            kTheJit->removeModule(h);
-        }
+            //kTheJit->removeModule(h);
+        //}
+        fn_ast->CodeGen();
     } else {
         GetNextToken();
     }
@@ -326,6 +389,9 @@ Parser::Parser(string file_path) {
     llvm::InitializeNativeTargetAsmPrinter();
     llvm::InitializeNativeTargetAsmParser();
     
+
+    // 1 is the lowest precedence.
+    bin_op_precedence_['='] = 2;
     bin_op_precedence_['<'] = 10;
     bin_op_precedence_['+'] = 20;
     bin_op_precedence_['-'] = 20;
@@ -337,9 +403,11 @@ Parser::Parser(string file_path) {
     
     GetNextToken();
 
-    kTheJit = make_unique<llvm::orc::KaleidoscopeJIT>();
+    //kTheJit = make_unique<llvm::orc::KaleidoscopeJIT>();
 
-    InitializeModuleAndPassManager();
+    //InitializeModuleAndPassManager();
+    kTheModule = std::make_unique<llvm::Module>("my coool jit", kTheContext);
+
 }
 
 

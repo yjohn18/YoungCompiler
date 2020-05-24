@@ -5,6 +5,8 @@
 #include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
+#include <llvm-9/llvm/IR/IRBuilder.h>
+#include <llvm-9/llvm/Transforms/Utils.h>
 #include "KaleidoscopeJIT.h"
 
 extern llvm::LLVMContext kTheContext;
@@ -42,7 +44,9 @@ void InitializeModuleAndPassManager() {
     // Create a new pass manager attached to it
     kTheFpm = std::make_unique<llvm::legacy::FunctionPassManager>(kTheModule.get());
 
-	// Do simple "peephole" optimizations and bit-twiddling optzns.
+	// Promote allocas to registers.
+    kTheFpm->add(llvm::createPromoteMemoryToRegisterPass());
+    // Do simple "peephole" optimizations and bit-twiddling optzns.
 	kTheFpm->add(llvm::createInstructionCombiningPass());
 	// Reassociate expressions.
 	kTheFpm->add(llvm::createReassociatePass());
@@ -65,3 +69,9 @@ llvm::Function *GetFunction(std::string name) {
     return nullptr;
 }
 
+// Create an alloca instruction in the entry block of the function.
+// This is used for mutable variables etc.
+llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Function *the_function, const std::string &var_name) {
+    llvm::IRBuilder<> tmp_b(&the_function->getEntryBlock(), the_function->getEntryBlock().begin());
+    return tmp_b.CreateAlloca(llvm::Type::getDoubleTy(kTheContext), 0, var_name.c_str());
+}

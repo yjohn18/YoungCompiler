@@ -51,6 +51,8 @@ int Lexer::GetTok() {
             return kTokElse;
         if (identifier_str_ == "while")
             return kTokWhile;
+        if (identifier_str_ == "double")
+            return kTokInt;
 
         return kTokIdentifier;
     }

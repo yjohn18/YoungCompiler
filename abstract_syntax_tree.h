@@ -18,7 +18,20 @@
 #include <llvm-9/llvm/IR/Type.h>
 #include <llvm-9/llvm/IR/Verifier.h>
 #include <llvm-9/llvm/IR/LegacyPassManager.h>
+#include <llvm-9/llvm/IR/Instructions.h>
 #include "KaleidoscopeJIT.h"
+
+//#ifdef _WIN32
+//#define DLLEXPORT __declspec(dllexport)
+//#else
+//#define DLLEXPORT
+//#endif
+
+//extern "C" DLLEXPORT int printi(int n) {
+    //fprintf(stderr, "%d\n", n);
+    //return 0;
+//}
+
 
 class PrototypeAst;
 
@@ -60,6 +73,7 @@ protected:
     std::string name_;
 public:
     VariableExprAst(const std::string &name) : name_(name) {}
+    const std::string &name() const { return name_; };
     llvm::Value *CodeGen() override;
 };
 
@@ -107,7 +121,18 @@ public:
     llvm::Value *CodeGen() override;
 };
 
+class IntExprAst : public ExprAst {
+protected:
+    std::vector<std::pair<std::string, std::unique_ptr<ExprAst>>> var_names_;
+    std::unique_ptr<ExprAst> body_;
+public:
+    // IntExprAst allows a list of names to be defined all at once,
+    // and each name can optionally have an initializer value.
+    IntExprAst(std::vector<std::pair<std::string, std::unique_ptr<ExprAst>>> var_names, std::unique_ptr<ExprAst> body)
+        : var_names_(std::move(var_names)), body_(std::move(body)) {}
 
+    llvm::Value *CodeGen() override;
+};
 
 /// PrototypeAST - This class represents the "prototype" for a function,
 /// which captures its name, and its argument names (thus implicitly the number

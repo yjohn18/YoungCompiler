@@ -47,6 +47,7 @@ protected:
     // identifierexpr
     //   ::= identifier
     //   ::= identifier '(' expression* ')'
+    //   the second is function call
     std::unique_ptr<ExprAst> ParseIdentifierExpr();
 
     // primary
@@ -60,6 +61,11 @@ protected:
     std::unique_ptr<ExprAst> ParseBinOpRhs(int expr_prec, 
             std::unique_ptr<ExprAst> lhs);
 
+    // statement
+    //   ::= expression
+    //   ::= '{' expression* '}'
+
+
     // expression
     //   ::= primary binoprhs
     std::unique_ptr<ExprAst> ParseExpression();
@@ -68,7 +74,7 @@ protected:
     // ::= id '(' id* ')'
     std::unique_ptr<PrototypeAst> ParsePrototype();
 
-    // definition ::= 'def' prototype expression
+    // definition ::= 'def' prototype '{' expression '}'
     std::unique_ptr<FunctionAst> ParseDefinition();
 
     // toplevelexpr ::= expression
@@ -82,6 +88,11 @@ protected:
     
     // whileexpr ::= 'while' '(' expression ')' expression
     std::unique_ptr<ExprAst> ParseWhileExpr();
+
+    // intexpr ::= 'int' identifier ('=' expression)?
+    // (',' identifier ('=' expression)?)* 'in' expression
+    std::unique_ptr<ExprAst> ParseIntExpr();
+
     /* Top-Level parsing */
     void HandleDefinition();
     void HandleExtern();
