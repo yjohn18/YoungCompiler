@@ -98,15 +98,12 @@ unique_ptr<ExprAst> Parser::ParsePrimary() {
             return ParseNumberExpr();
         case '(':
             return ParseParenExpr();
-        case kTokIf:
-            return ParseIfExpr();
-        case kTokWhile:
-            return ParseWhileExpr();
-        case kTokInt:
-            return ParseIntExpr();
-        case '}': // Is it correct?
-            cerr << "I find '}'" << endl;
-            return nullptr;
+        //case kTokIf:
+            //return ParseIfExpr();
+        //case kTokWhile:
+            //return ParseWhileExpr();
+        //case kTokInt:
+            //return ParseIntExpr();
         default:
             cerr << "cut_tok_ " << cur_tok_ << endl;
             return LogError("unknown token when expecting an expression");
@@ -165,8 +162,18 @@ unique_ptr<PrototypeAst> Parser::ParsePrototype() {
         return LogErrorP("Expected '(' in prototype");
 
     vector<string> arg_names;
-    while (GetNextToken() == kTokIdentifier)
+    GetNextToken();
+    while (cur_tok_ == kTokInt) {
+        GetNextToken(); // eat "double"
+
+        if (cur_tok_ != kTokIdentifier)
+            return LogErrorP("Expected identifier in prototype");
         arg_names.push_back(lexer_.identifier_str());
+        GetNextToken();
+
+        if (cur_tok_ == ',')
+            GetNextToken(); // eat ','
+    }
     if (cur_tok_ != ')')
         return LogErrorP("Expected ')' in prototype");
 
@@ -181,28 +188,20 @@ unique_ptr<FunctionAst> Parser::ParseDefinition() {
     if (!proto)
         return nullptr;
 
-    //if (cur_tok_ != '{')
-        //LogErrorP("expected '{'");
-    //GetNextToken(); // eat '{'
+    if (auto compound_stat = ParseCompoundStat()) {
 
-    if (auto expr = ParseExpression()) {
-        //if (cur_tok_ != '}')
-            //std::cerr << "cur_tok_ " << cur_tok_ << std::endl;
-            //LogErrorP("expected '}'");
-        //GetNextToken(); // eat '}'
-
-        return make_unique<FunctionAst>(move(proto), move(expr));
+        return make_unique<FunctionAst>(move(proto), move(compound_stat));
     }
-    
+   
+    LogError("Parse CS failed");
     return nullptr;
 }
 
-
 unique_ptr<FunctionAst> Parser::ParseTopLevelExpr() {
-    if (auto expr = ParseExpression()) {
-        auto proto = make_unique<PrototypeAst>("__anon_expr", vector<string>());
-        return make_unique<FunctionAst>(move(proto), move(expr));
-    }
+    //if (auto expr = ParseExpression()) {
+        //auto proto = make_unique<PrototypeAst>("__anon_expr", vector<string>());
+        //return make_unique<FunctionAst>(move(proto), move(expr));
+    //}
     return nullptr;
 }
 
@@ -211,11 +210,11 @@ unique_ptr<PrototypeAst> Parser::ParseExtern() {
     return ParsePrototype();
 }
 
-unique_ptr<ExprAst> Parser::ParseIfExpr() {
+unique_ptr<StatAst> Parser::ParseIfStat() {
     GetNextToken(); // eat 'if'
 
     if (cur_tok_ != '(')
-        return LogError("expected '('");
+        return LogErrorS("expected '('");
     GetNextToken(); // eat '('
 
     // condition
@@ -224,32 +223,32 @@ unique_ptr<ExprAst> Parser::ParseIfExpr() {
         return nullptr;
 
     if (cur_tok_ != ')')
-        return LogError("expected ')'");
+        return LogErrorS("expected ')'");
     GetNextToken(); // ')'
 
-    auto then_expr = ParseExpression();
-    if (!then_expr)
+    auto then_stat = ParseCompoundStat();
+    if (!then_stat)
         return nullptr;
 
     if (cur_tok_ != kTokElse) {
         // if - then expression
         cerr << "cur_tok_ " << cur_tok_ << endl;
-        return LogError("expected else");
+        return LogErrorS("expected else");
     }
 
     GetNextToken();
 
-    auto else_expr = ParseExpression();
-    if (!else_expr)
+    auto else_stat = ParseCompoundStat();
+    if (!else_stat)
         return nullptr;
-    return make_unique<IfExprAst>(move(cond), move(then_expr), move(else_expr));
+    return make_unique<IfStatAst>(move(cond), move(then_stat), move(else_stat));
 }
 
-unique_ptr<ExprAst> Parser::ParseWhileExpr() {
+unique_ptr<StatAst> Parser::ParseWhileStat() {
     GetNextToken(); // eat 'while'
 
     if (cur_tok_ != '(')
-        return LogError("expected '(' after while");
+        return LogErrorS("expected '(' after while");
     GetNextToken(); // eat '('
 
     // condition
@@ -258,65 +257,162 @@ unique_ptr<ExprAst> Parser::ParseWhileExpr() {
         return nullptr;
 
     if (cur_tok_ != ')')
-        return LogError("expected ')'");
+        return LogErrorS("expected ')'");
     GetNextToken(); // eat ')'
 
-    auto body = ParseExpression();
+    auto body = ParseCompoundStat();
     if (!body)
         return nullptr;
 
-    cerr << "parse while expression done" << endl;
-    return make_unique<WhileExprAst>(move(cond), move(body));
+    return make_unique<WhileStatAst>(move(cond), move(body));
 }
 
-unique_ptr<ExprAst> Parser::ParseIntExpr() {
-    GetNextToken();
+// 语句块
+unique_ptr<CompoundStatAst> Parser::ParseCompoundStat() {
+    
+    if (cur_tok_ != '{')
+        return LogErrorCS("expected '{'");
+    GetNextToken(); // eat '{'
 
     vector<pair<string, unique_ptr<ExprAst>>> var_names;
+    unique_ptr<StatListAst> body;
 
-    // At least one variable is required.
-    if (cur_tok_ != kTokIdentifier)
-        return LogError("expected identifier after 'int'");
+    if (cur_tok_ == kTokInt) {
+        GetNextToken(); // eat 'double'
 
-    while (true) {
-        string name = lexer_.identifier_str();
-        GetNextToken(); // eat identifier
+        // At least one variable is required.
+        if (cur_tok_ != kTokIdentifier)
+            return LogErrorCS("expected identifier after 'int'");
 
-        // Read the optional initializer.
-        unique_ptr<ExprAst> init; // initializer
-        if (cur_tok_ == '=') {
-            GetNextToken();
+        while (true) {
+            string name = lexer_.identifier_str();
+            GetNextToken(); // eat identifier
 
-            init = ParseExpression();
-            if (!init)
-                return nullptr;
+            // Read the optional initializer.
+            unique_ptr<ExprAst> init; // initializer
+            if (cur_tok_ == '=') {
+                GetNextToken();
+
+                init = ParseExpression();
+                if (!init)
+                    return nullptr;
+            }
+
+            var_names.push_back(make_pair(name, move(init)));
+
+            // End of var list, exit loop.
+            if (cur_tok_ != ',')
+                break;
+
+            GetNextToken(); // eat ','
+            if (cur_tok_ != kTokIdentifier)
+                return LogErrorCS("expected identifier list after var");
         }
 
-        var_names.push_back(make_pair(name, move(init)));
+        if (cur_tok_ != ';')
+            return LogErrorCS("expected ';'");
+        GetNextToken(); // eat ';'
 
-        // End of var list, exit loop.
-        if (cur_tok_ != ',')
-            break;
-
-        GetNextToken(); // eat ','
-        if (cur_tok_ != kTokIdentifier)
-            return LogError("expected identifier list after var");
+        // body
+        body = ParseStatList();
+        if (!body)
+            return nullptr;
+        
+    } else {
+        // no vairable declare
+        body = ParseStatList();
+        if (!body)
+            return nullptr;
     }
+    
+    if (cur_tok_ != '}')
+        return LogErrorCS("expected '}'");
+    GetNextToken(); // eat '}'
 
-    if (cur_tok_ != ';')
-        return LogError("expected ';'");
-    GetNextToken(); // eat ';'
+    return make_unique<CompoundStatAst>(move(var_names), move(body));
+}
 
-    // body
-    unique_ptr<ExprAst> body = ParseExpression();
-    if (!body)
+// 语句串
+unique_ptr<StatListAst> Parser::ParseStatList() {
+    vector<unique_ptr<StatAst>> stat_list;
+    bool loop = true;
+
+    unique_ptr<StatAst> stat;
+
+    while (loop) {
+        switch (cur_tok_) {
+            case kTokIf:
+                stat = ParseIfStat();
+                if (!stat)
+                    return nullptr;
+                stat_list.push_back(move(stat));
+                break;
+            case kTokWhile:
+                stat = ParseWhileStat();
+                if (!stat)
+                    return nullptr;
+                stat_list.push_back(move(stat));
+                break;
+            case kTokReturn:
+                stat = ParseReturnStat();
+                if (!stat)
+                    return nullptr;
+                stat_list.push_back(move(stat));
+                break;
+            case kTokIdentifier:
+                stat = ParseAssignmentStat();
+                if (!stat)
+                    return nullptr;
+                stat_list.push_back(move(stat));
+                break;
+            default:
+                loop = false;
+                break;
+        }
+    }
+    return make_unique<StatListAst>(move(stat_list));
+}
+
+// return 语句
+unique_ptr<StatAst> Parser::ParseReturnStat() {
+    GetNextToken(); // eat "return"
+
+    auto expr = ParseExpression();
+    if (!expr)
         return nullptr;
     
-    return make_unique<IntExprAst>(move(var_names), move(body));
+    if (cur_tok_ != ';')
+        return LogErrorS("expected ';'");
+    GetNextToken(); // eat ';'
+
+    return make_unique<ReturnStatAst>(move(expr));
+}
+
+// 赋值语句
+unique_ptr<StatAst> Parser::ParseAssignmentStat() {
+    string id_name = lexer_.identifier_str();
+
+    GetNextToken(); // eat identifier
+
+    if (cur_tok_ != '=')
+        return LogErrorS("expected '='");
+    GetNextToken(); // eat '='
+
+    auto expr = ParseExpression();
+    if (!expr)
+        return nullptr;
+
+    if (cur_tok_ != ';')
+        return LogErrorS("expected ';'");
+    GetNextToken(); // eat ';'
+
+    return make_unique<AssignmentStatAst>(id_name, move(expr));
 }
 
 void Parser::HandleDefinition() {
+    cerr << "HandleDefinition" << endl;
     if (auto fn_ast = ParseDefinition()) {
+        cerr << "HandleDefinition success" << endl;
         if (auto *fn_ir = fn_ast->CodeGen()) {
             cerr << "Read function definition: ";
             fn_ir->print(llvm::errs());
@@ -325,6 +421,7 @@ void Parser::HandleDefinition() {
             //InitializeModuleAndPassManager();
         }
     } else {
+        cerr << "HandleDefinition failed" << endl;
         GetNextToken();
     }
 }
@@ -372,6 +469,7 @@ void Parser::MainLoop() {
                 GetNextToken();
                 break;
             case kTokDef:
+            case kTokInt: // that means global variables are not supported 
                 HandleDefinition();
                 break;
             case kTokExtern:
@@ -406,7 +504,7 @@ Parser::Parser(string file_path) {
     //kTheJit = make_unique<llvm::orc::KaleidoscopeJIT>();
 
     //InitializeModuleAndPassManager();
-    kTheModule = std::make_unique<llvm::Module>("my coool jit", kTheContext);
+    kTheModule = std::make_unique<llvm::Module>("my awesome jit", kTheContext);
 
 }
 

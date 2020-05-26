@@ -21,17 +21,6 @@
 #include <llvm-9/llvm/IR/Instructions.h>
 #include "KaleidoscopeJIT.h"
 
-//#ifdef _WIN32
-//#define DLLEXPORT __declspec(dllexport)
-//#else
-//#define DLLEXPORT
-//#endif
-
-//extern "C" DLLEXPORT int printi(int n) {
-    //fprintf(stderr, "%d\n", n);
-    //return 0;
-//}
-
 
 class PrototypeAst;
 
@@ -100,37 +89,81 @@ public:
     llvm::Value *CodeGen() override;
 };
 
-/// IfExprAST - Expression class for if/then/else.
-class IfExprAst : public ExprAst {
-protected:
-    std::unique_ptr<ExprAst> cond_, then_, else_;
+/// 语句
+class StatAst {
 public:
-    IfExprAst(std::unique_ptr<ExprAst> c, std::unique_ptr<ExprAst> t,
-              std::unique_ptr<ExprAst> e)
+    virtual ~StatAst() = default;
+    virtual llvm::Value *CodeGen() = 0;
+};
+
+
+/// 语句串
+class StatListAst {
+protected:
+    std::vector<std::unique_ptr<StatAst>> stat_list_;
+public:
+    StatListAst(std::vector<std::unique_ptr<StatAst>> stat_list)
+        : stat_list_(std::move(stat_list)) {}
+    llvm::Value *CodeGen();
+};
+
+/// 语句块
+class CompoundStatAst {
+protected:
+    std::vector<std::pair<std::string, std::unique_ptr<ExprAst>>> var_names_;
+    //std::unique_ptr<ExprAst> body_;
+    std::unique_ptr<StatListAst> body_;
+public:
+    // IntExprAst allows a list of names to be defined all at once,
+    // and each name can optionally have an initializer value.
+    CompoundStatAst(std::vector<std::pair<std::string, std::unique_ptr<ExprAst>>> var_names, std::unique_ptr<StatListAst> body)
+        : var_names_(std::move(var_names)), body_(std::move(body)) {}
+
+    llvm::Value *CodeGen();
+};
+
+/// 赋值语句
+class AssignmentStatAst : public StatAst {
+protected:
+    std::string name_;
+    std::unique_ptr<ExprAst> expr_;
+public:
+    AssignmentStatAst(std::string name, std::unique_ptr<ExprAst> expr)
+        :name_(name), expr_(std::move(expr)) {}
+    llvm::Value *CodeGen() override;
+};
+
+/// return 语句
+class ReturnStatAst : public StatAst {
+protected:
+    std::unique_ptr<ExprAst> expr_;
+public:
+    ReturnStatAst(std::unique_ptr<ExprAst> expr)
+        : expr_(std::move(expr)) {}
+    llvm::Value *CodeGen() override;
+};
+
+/// IfExprAST - Expression class for if/then/else.
+class IfStatAst : public StatAst {
+protected:
+    std::unique_ptr<ExprAst> cond_;
+    std::unique_ptr<CompoundStatAst> then_;
+    std::unique_ptr<CompoundStatAst> else_;
+public:
+    IfStatAst(std::unique_ptr<ExprAst> c, std::unique_ptr<CompoundStatAst> t,
+              std::unique_ptr<CompoundStatAst> e)
         : cond_(std::move(c)), then_(std::move(t)), else_(std::move(e)) {}
     llvm::Value *CodeGen() override;
 };
 
 /// WhileExpreAst - Expression class for while
-class WhileExprAst : public ExprAst {
+class WhileStatAst : public StatAst {
 protected:
-    std::unique_ptr<ExprAst> cond_, body_;
+    std::unique_ptr<ExprAst> cond_;
+    std::unique_ptr<CompoundStatAst> body_;
 public:
-    WhileExprAst(std::unique_ptr<ExprAst> cond, std::unique_ptr<ExprAst> body)
+    WhileStatAst(std::unique_ptr<ExprAst> cond, std::unique_ptr<CompoundStatAst> body)
         : cond_(std::move(cond)), body_(std::move(body)) {}
-    llvm::Value *CodeGen() override;
-};
-
-class IntExprAst : public ExprAst {
-protected:
-    std::vector<std::pair<std::string, std::unique_ptr<ExprAst>>> var_names_;
-    std::unique_ptr<ExprAst> body_;
-public:
-    // IntExprAst allows a list of names to be defined all at once,
-    // and each name can optionally have an initializer value.
-    IntExprAst(std::vector<std::pair<std::string, std::unique_ptr<ExprAst>>> var_names, std::unique_ptr<ExprAst> body)
-        : var_names_(std::move(var_names)), body_(std::move(body)) {}
-
     llvm::Value *CodeGen() override;
 };
 
@@ -152,13 +185,14 @@ public:
 class FunctionAst : public Ast{
 protected:
     std::unique_ptr<PrototypeAst> proto_;
-    std::unique_ptr<ExprAst> body_;
+    std::unique_ptr<CompoundStatAst> body_;
 public:
     FunctionAst(std::unique_ptr<PrototypeAst> proto,
-                std::unique_ptr<ExprAst> body)
+                std::unique_ptr<CompoundStatAst> body)
         : proto_(std::move(proto)), body_(std::move(body)) {}
     llvm::Function *CodeGen();
 };
+
 
 //} // end anonymous namespace
 

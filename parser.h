@@ -84,14 +84,21 @@ protected:
     std::unique_ptr<PrototypeAst> ParseExtern();
     
     // ifexpr ::= 'if' '(' expression ')' expression 'else' expression
-    std::unique_ptr<ExprAst> ParseIfExpr();
+    std::unique_ptr<StatAst> ParseIfStat();
     
     // whileexpr ::= 'while' '(' expression ')' expression
-    std::unique_ptr<ExprAst> ParseWhileExpr();
+    std::unique_ptr<StatAst> ParseWhileStat();
+
+    std::unique_ptr<StatAst> ParseReturnStat();
+
+    std::unique_ptr<StatAst> ParseAssignmentStat();
 
     // intexpr ::= 'int' identifier ('=' expression)?
     // (',' identifier ('=' expression)?)* 'in' expression
-    std::unique_ptr<ExprAst> ParseIntExpr();
+    std::unique_ptr<CompoundStatAst> ParseCompoundStat();
+
+    std::unique_ptr<StatListAst> ParseStatList();
+
 
     /* Top-Level parsing */
     void HandleDefinition();

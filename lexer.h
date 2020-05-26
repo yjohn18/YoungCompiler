@@ -24,7 +24,9 @@ enum Token {
     kTokWhile = -9,
 
     kTokInt = -10,
-    kTokDouble = -11
+    kTokDouble = -11,
+    
+    kTokReturn = -12
 };
 
 class Lexer {

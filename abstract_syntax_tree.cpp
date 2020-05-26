@@ -89,7 +89,16 @@ Value *CallExprAst::CodeGen() {
     return kBuilder.CreateCall(callee_f, args_v, "calltmp");
 }
 
-Value *IfExprAst::CodeGen() {
+Value *StatListAst::CodeGen() {
+    for (auto &stat : stat_list_)
+        if (!stat->CodeGen())
+            return nullptr;
+
+    std::cerr << "StatListAst codegen success" << std::endl;
+    return Constant::getNullValue(Type::getDoubleTy(kTheContext));
+}
+
+Value *IfStatAst::CodeGen() {
     Value *cond_v = cond_->CodeGen();
     if (!cond_v)
         return nullptr;
@@ -110,8 +119,10 @@ Value *IfExprAst::CodeGen() {
     // Emit then value.
     kBuilder.SetInsertPoint(then_bb);
 
-    Value *then_v = then_->CodeGen();
-    if (!then_v)
+    //Value *then_v = then_->CodeGen();
+    //if (!then_v)
+        //return nullptr;
+    if (!then_->CodeGen())
         return nullptr;
 
     kBuilder.CreateBr(merge_bb);
@@ -123,8 +134,10 @@ Value *IfExprAst::CodeGen() {
     the_function->getBasicBlockList().push_back(else_bb);
     kBuilder.SetInsertPoint(else_bb);
 
-    Value *else_v = else_->CodeGen();
-    if (!else_v)
+    //Value *else_v = else_->CodeGen();
+    //if (!else_v)
+        //return nullptr;
+    if (!else_->CodeGen())
         return nullptr;
 
     kBuilder.CreateBr(merge_bb);
@@ -134,15 +147,15 @@ Value *IfExprAst::CodeGen() {
     // emit merge block.
     the_function->getBasicBlockList().push_back(merge_bb);
     kBuilder.SetInsertPoint(merge_bb);
-    PHINode *pn = kBuilder.CreatePHI(Type::getDoubleTy(kTheContext), 2, "iftmp");
-
-    pn->addIncoming(then_v, then_bb);
-    pn->addIncoming(else_v, else_bb);
-
-    return pn;
+    // nop
+    kBuilder.CreateFAdd(
+            ConstantFP::get(kTheContext, APFloat(0.0)),
+            ConstantFP::get(kTheContext, APFloat(0.0)),
+            "nop");
+    return Constant::getNullValue(Type::getDoubleTy(kTheContext));
 }
 
-Value *WhileExprAst::CodeGen() {
+Value *WhileStatAst::CodeGen() {
     std::cerr << "start codegen while" << std::endl;
     //Value *cond_v = cond_->CodeGen();
     //if (!cond_v)
@@ -183,11 +196,36 @@ Value *WhileExprAst::CodeGen() {
     the_function->getBasicBlockList().push_back(after_bb);
     kBuilder.SetInsertPoint(after_bb);
 
-    std::cerr << "finish codegen while" << std::endl;
+    // nop
+    kBuilder.CreateFAdd(
+            ConstantFP::get(kTheContext, APFloat(0.0)),
+            ConstantFP::get(kTheContext, APFloat(0.0)),
+            "nop");
+
     return Constant::getNullValue(Type::getDoubleTy(kTheContext));
 }
 
-Value *IntExprAst::CodeGen() {
+Value *ReturnStatAst::CodeGen() {
+    Value *retval = expr_->CodeGen();
+    if (!retval)
+        return nullptr;
+    
+    kBuilder.CreateRet(retval);
+
+    std::cerr << "Return codegen success" << std::endl;
+    return Constant::getNullValue(Type::getDoubleTy(kTheContext));
+} 
+
+Value *AssignmentStatAst::CodeGen() {
+    
+    Value *val = expr_->CodeGen();
+
+    kBuilder.CreateStore(val, kNamedValues[name_]);
+
+    return Constant::getNullValue(Type::getDoubleTy(kTheContext));
+}
+
+Value *CompoundStatAst::CodeGen() {
     std::vector<AllocaInst *> old_bindings;
 
     Function *the_function = kBuilder.GetInsertBlock()->getParent();
@@ -203,6 +241,7 @@ Value *IntExprAst::CodeGen() {
             if (!init_val)
                 return nullptr;
         } else {
+            // if there is no initializer, set to 0
             init_val = ConstantFP::get(kTheContext, APFloat(0.0));
         }
 
@@ -218,9 +257,10 @@ Value *IntExprAst::CodeGen() {
     }
 
     // Codegen the body.
-    Value *body_val = body_->CodeGen();
-    if (!body_val)
+    if (!body_->CodeGen())
         return nullptr;
+
+    std::cerr << "codegen cs success" << std::endl;
 
     // Pop all our variables from scope.
     for (unsigned i = 0, e = var_names_.size(); i != e; ++i)
@@ -245,6 +285,8 @@ Function *PrototypeAst::CodeGen() {
 }
 
 Function *FunctionAst::CodeGen() {
+    std::cerr << "1" << std::endl;
+    
     // First check for an existing function from a previous "extern" declaration.
     auto &p = *proto_;
     kFunctionProtos[proto_->name()] = std::move(proto_);
@@ -252,9 +294,11 @@ Function *FunctionAst::CodeGen() {
 
     if (!the_function)
         the_function = proto_->CodeGen();
+    std::cerr << "2" << std::endl;
 
     if (!the_function)
         return nullptr;
+    std::cerr << "3" << std::endl;
 
     if (!the_function->empty())
         return (Function*)LogErrorV("Function cannot be redefined.");
@@ -276,21 +320,23 @@ Function *FunctionAst::CodeGen() {
         kNamedValues[arg.getName()] = alloca;
     }
 
-    if (Value *retval = body_->CodeGen()) {
+    if (body_->CodeGen()) {
         // Finish off the function.
-        kBuilder.CreateRet(retval);
+        //kBuilder.CreateRet(retval);
 
         // Validate the generated code, checking for consistency.
         verifyFunction(*the_function);
         
         //kTheFpm->run(*the_function);
 
+        std::cerr << "4" << std::endl;
         return the_function;
     }
 
     // Error reading body, remove function.
     the_function->eraseFromParent();
 
+    std::cerr << "5" << std::endl;
     return nullptr;
 }
 

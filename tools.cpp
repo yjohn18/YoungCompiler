@@ -31,6 +31,16 @@ std::unique_ptr<PrototypeAst> LogErrorP(const char *str) {
     return nullptr;
 }
 
+std::unique_ptr<StatAst> LogErrorS(const char *str) {
+    LogError(str);
+    return nullptr;
+}
+
+std::unique_ptr<CompoundStatAst> LogErrorCS(const char *str) {
+    LogError(str);
+    return nullptr;
+}
+
 llvm::Value *LogErrorV(const char *str) {
     LogError(str);
     return nullptr;
